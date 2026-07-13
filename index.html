@@ -15,12 +15,27 @@
         .result-box { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin: 15px 0; min-height: 50px; }
         .status-owned { color: #2ed573; font-weight: bold; font-size: 1.2rem; }
         .status-not-owned { color: #ff4757; font-weight: bold; font-size: 1.2rem; }
-        .input-group { display: none; margin-top: 10px; }
-        input[type="text"] { width: 70%; padding: 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; }
+        
+        /* 登録フォームのスタイル */
+        .input-group { display: none; margin-top: 15px; background: #fffdfd; padding: 15px; border: 1px dashed #ff6b81; border-radius: 10px; }
+        .form-row { margin-bottom: 10px; text-align: left; max-width: 300px; margin-left: auto; margin-right: auto; }
+        label { font-size: 0.9rem; font-weight: bold; color: #555; display: block; margin-bottom: 4px; }
+        select, input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; box-sizing: border-box; }
+        
+        /* ★アコーディオンメニューのスタイル */
         .list-section { text-align: left; margin-top: 30px; }
-        ul { list-style: none; padding: 0; }
-        li { background: white; padding: 10px; margin-bottom: 5px; border-radius: 5px; border-left: 5px solid #ff6b81; display: flex; justify-content: space-between; }
-        .delete-btn { color: #ff4757; cursor: pointer; font-weight: bold; padding: 0 5px; }
+        details { background: white; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
+        summary { padding: 12px 15px; font-weight: bold; background: #ffe4e8; color: #d63031; cursor: pointer; display: flex; justify-content: space-between; align-items: center; outline: none; }
+        summary::-webkit-details-marker { display: none; } /* デフォルトの黒矢印を消す */
+        summary::after { content: '▼'; font-size: 0.8rem; color: #ff6b81; }
+        details[open] summary::after { content: '▲'; }
+        
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { padding: 12px 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem; }
+        li:last-child { border-bottom: none; }
+        .nail-code { color: #999; font-size: 0.8rem; margin-left: 5px; }
+        .delete-btn { color: #ff4757; cursor: pointer; font-weight: bold; padding: 5px; font-size: 1.1rem; }
+        .empty-msg { padding: 15px; color: #999; font-style: italic; font-size: 0.9rem; text-align: center; }
     </style>
 </head>
 <body>
@@ -39,43 +54,130 @@
 
     <!-- 新規登録フォーム -->
     <div class="input-group" id="registration-form">
-        <p>新しいネイルです！名前をつけて保存しますか？</p>
-        <input type="text" id="nail-name" placeholder="例：セリア シアーピンク">
-        <button class="btn" id="save-btn" style="width:auto; padding:8px 15px; margin-left:5px;">登録</button>
+        <p style="margin-top:0; font-weight:bold; color:#ff6b81;">🌟 新しいネイルを登録</p>
+        
+        <div class="form-row">
+            <label for="nail-brand">ブランド（購入店）</label>
+            <select id="nail-brand">
+                <option value="セリア">セリア (Seria)</option>
+                <option value="ダイソー">ダイソー (DAISO)</option>
+                <option value="キャンドゥ">キャンドゥ (CanDo)</option>
+                <option value="その他">その他</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label for="nail-name">色名・番号</label>
+            <input type="text" id="nail-name" placeholder="例：シアーピンク / SHGJ2315">
+        </div>
+
+        <button class="btn" id="save-btn" style="width:100%; max-width:300px; margin-top:5px;">この内容でリストに保存</button>
     </div>
 
-    <!-- 所持リスト -->
+    <!-- 所持リスト（アコーディオン形式） -->
     <div class="list-section">
-        <h3>私のコレクション一覧 (<span id="count">0</span>本)</h3>
-        <ul id="nail-list"></ul>
+        <h3>私のコレクション一覧 (合計 <span id="count">0</span>本)</h3>
+        
+        <!-- セリア -->
+        <details id="details-セリア">
+            <summary>セリア (<span id="count-セリア">0</span>)</summary>
+            <ul id="list-セリア"></ul>
+        </details>
+
+        <!-- ダイソー -->
+        <details id="details-ダイソー">
+            <summary>ダイソー (<span id="count-ダイソー">0</span>)</summary>
+            <ul id="list-ダイソー"></ul>
+        </details>
+
+        <!-- キャンドゥ -->
+        <details id="details-キャンドゥ">
+            <summary>キャンドゥ (<span id="count-キャンドゥ">0</span>)</summary>
+            <ul id="list-キャンドゥ"></ul>
+        </details>
+
+        <!-- その他 -->
+        <details id="details-その他">
+            <summary>その他 (<span id="count-その他">0</span>)</summary>
+            <ul id="list-その他"></ul>
+        </details>
     </div>
 
     <script>
-        // スマホ内に保存されたネイルデータを読み込み
-        let nailDatabase = JSON.parse(localStorage.getItem('myNailColors')) || {};
+        // データの保存形式をブランド毎に管理できるよう最適化
+        let rawData = localStorage.getItem('myNailColors2') || localStorage.getItem('myNailColors');
+        let nailDatabase = {};
+        
+        try {
+            let parsed = JSON.parse(rawData);
+            if (parsed && typeof parsed === 'object') {
+                // 旧形式のデータ（[セリア] シアーピンク のような文字列）がある場合は自動で新形式に変換
+                for(let code in parsed) {
+                    if (typeof parsed[code] === 'string') {
+                        let match = parsed[code].match(/^\[(.+?)\]\s*(.*)$/);
+                        if (match) {
+                            nailDatabase[code] = { brand: match[1], name: match[2] };
+                        } else {
+                            nailDatabase[code] = { brand: 'その他', name: parsed[code] };
+                        }
+                    } else {
+                        nailDatabase[code] = parsed[code];
+                    }
+                }
+            }
+        } catch(e) {
+            nailDatabase = {};
+        }
+
         let currentCode = "";
 
         const scanBtn = document.getElementById('scan-btn');
         const cameraView = document.getElementById('interactive');
         const resultContainer = document.getElementById('result-container');
         const regForm = document.getElementById('registration-form');
+        const nailBrandSelect = document.getElementById('nail-brand');
         const nailNameInput = document.getElementById('nail-name');
         const saveBtn = document.getElementById('save-btn');
 
-        // リストの表示更新
+        const BRANDS = ['セリア', 'ダイソー', 'キャンドゥ', 'その他'];
+
+        // リストの表示更新（アコーディオン表示に対応）
         function updateList() {
-            const listEl = document.getElementById('nail-list');
-            listEl.innerHTML = "";
-            let count = 0;
+            // 各リストを一度リセット
+            let brandCounts = { 'セリア': 0, 'ダイソー': 0, 'キャンドゥ': 0, 'その他': 0 };
+            BRANDS.forEach(brand => {
+                document.getElementById(`list-${brand}`).innerHTML = "";
+            });
+
+            let totalCount = 0;
+
+            // 各ネイルを該当するブランドのリストに振り分け
             for (let code in nailDatabase) {
-                count++;
+                totalCount++;
+                let item = nailDatabase[code];
+                let brand = BRANDS.includes(item.brand) ? item.brand : 'other';
+                if (brand === 'other') brand = 'その他';
+                
+                brandCounts[brand]++;
+
                 const li = document.createElement('li');
-                li.innerHTML = `<span>${nailDatabase[code]} <small style="color:#999;">(${code})</small></span> 
+                li.innerHTML = `<div><strong>${item.name}</strong><span class="nail-code">(${code})</span></div> 
                                 <span class="delete-btn" onclick="deleteNail('${code}')">×</span>`;
-                listEl.appendChild(li);
+                document.getElementById(`list-${brand}`).appendChild(li);
             }
-            document.getElementById('count').textContent = count;
-            localStorage.setItem('myNailColors', JSON.stringify(nailDatabase));
+
+            // 本数のカウンター更新と、空っぽの時のメッセージ表示
+            document.getElementById('count').textContent = totalCount;
+            BRANDS.forEach(brand => {
+                document.getElementById(`count-${brand}`).textContent = brandCounts[brand];
+                const listEl = document.getElementById(`list-${brand}`);
+                if (brandCounts[brand] === 0) {
+                    listEl.innerHTML = '<div class="empty-msg">まだ登録がありません</div>';
+                }
+            });
+
+            // データの保存
+            localStorage.setItem('myNailColors2', JSON.stringify(nailDatabase));
         }
 
         // 削除機能
@@ -86,7 +188,7 @@
             }
         }
 
-        // スキャン開始・停止
+        // スキャン開始
         scanBtn.addEventListener('click', () => {
             cameraView.style.display = 'block';
             regForm.style.display = 'none';
@@ -97,10 +199,10 @@
                     name: "Live",
                     type: "LiveStream",
                     target: cameraView,
-                    constraints: { facingMode: "environment" } // 背面カメラを使用
+                    constraints: { facingMode: "environment" }
                 },
                 decoder: {
-                    readers: ["ean_reader", "ean_8_reader"] // 100均のJANコードに対応
+                    readers: ["ean_reader", "ean_8_reader"]
                 }
             }, function(err) {
                 if (err) { alert("カメラの起動に失敗しました"); return; }
@@ -108,40 +210,50 @@
             });
         });
 
-        // バーコードが読み取れた時の処理
+        // バーコード検出時
         Quagga.onDetected((data) => {
             currentCode = data.codeResult.code;
             Quagga.stop();
             cameraView.style.display = 'none';
             
-            // データベースに存在するかチェック
             if (nailDatabase[currentCode]) {
+                let item = nailDatabase[currentCode];
                 resultContainer.innerHTML = `
                     <p class="status-owned">すでに入手済みです！</p>
-                    <p>👉 登録名: <strong>${nailDatabase[currentCode]}</strong></p>
+                    <p>👉 登録名: <strong>[${item.brand}] ${item.name}</strong></p>
                 `;
                 regForm.style.display = 'none';
+                
+                // ★所有しているブランドのアコーディオンを自動で開く
+                let brand = BRANDS.includes(item.brand) ? item.brand : 'その他';
+                document.getElementById(`details-${brand}`).open = true;
             } else {
                 resultContainer.innerHTML = `
                     <p class="status-not-owned">まだ持っていません！</p>
                     <p>コード: ${currentCode}</p>
                 `;
                 nailNameInput.value = "";
+                nailBrandSelect.selectedIndex = 0;
                 regForm.style.display = 'block';
             }
         });
 
-        // 新しく保存するボタン
+        // 保存ボタンを押したとき
         saveBtn.addEventListener('click', () => {
+            const brand = nailBrandSelect.value;
             const name = nailNameInput.value.trim();
-            if (!name) { alert("名前を入力してください"); return; }
-            nailDatabase[currentCode] = name;
+            if (!name) { alert("色名または番号を入力してください"); return; }
+            
+            nailDatabase[currentCode] = { brand: brand, name: name };
+            
             regForm.style.display = 'none';
-            resultContainer.innerHTML = `<p style="color:#2ed573;">「${name}」を登録しました！</p>`;
+            resultContainer.innerHTML = `<p style="color:#2ed573;">「[${brand}] ${name}」を登録しました！</p>`;
             updateList();
+            
+            // ★登録したブランドのアコーディオンを開く
+            document.getElementById(`details-${brand}`).open = true;
         });
 
-        // 初回読み込み
         updateList();
     </script>
 </body>
