@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>100均ネイル所持チェッカー</title>
+    <!-- バーコード読み取り用の外部ライブラリ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f9f9f9; color: #333; text-align: center; }
+        h1 { font-size: 1.4rem; color: #ff6b81; }
+        .btn { background: #ff6b81; color: white; border: none; padding: 12px 24px; font-size: 1rem; border-radius: 25px; cursor: pointer; margin: 10px 0; width: 80%; max-width: 300px; }
+        #interactive.viewport { width: 100%; height: 250px; background: #000; overflow: hidden; position: relative; border-radius: 10px; margin: 15px 0; display: none; }
+        #interactive.viewport video { width: 100%; height: 100%; object-fit: cover; }
+        .result-box { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin: 15px 0; min-height: 50px; }
+        .status-owned { color: #2ed573; font-weight: bold; font-size: 1.2rem; }
+        .status-not-owned { color: #ff4757; font-weight: bold; font-size: 1.2rem; }
+        .input-group { display: none; margin-top: 10px; }
+        input[type="text"] { width: 70%; padding: 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; }
+        .list-section { text-align: left; margin-top: 30px; }
+        ul { list-style: none; padding: 0; }
+        li { background: white; padding: 10px; margin-bottom: 5px; border-radius: 5px; border-left: 5px solid #ff6b81; display: flex; justify-content: space-between; }
+        .delete-btn { color: #ff4757; cursor: pointer; font-weight: bold; padding: 0 5px; }
+    </style>
+</head>
+<body>
+
+    <h1>💅 100均ネイル所持チェッカー</h1>
+    
+    <button class="btn" id="scan-btn">📷 店頭でバーコードをスキャン</button>
+    
+    <!-- カメラ映像エリア -->
+    <div id="interactive" class="viewport"></div>
+    
+    <!-- スキャン結果表示 -->
+    <div class="result-box" id="result-container">
+        <p style="color:#888;">上のボタンを押して、ボトルのバーコードをカメラにかざしてください</p>
+    </div>
+
+    <!-- 新規登録フォーム -->
+    <div class="input-group" id="registration-form">
+        <p>新しいネイルです！名前をつけて保存しますか？</p>
+        <input type="text" id="nail-name" placeholder="例：セリア シアーピンク">
+        <button class="btn" id="save-btn" style="width:auto; padding:8px 15px; margin-left:5px;">登録</button>
+    </div>
+
+    <!-- 所持リスト -->
+    <div class="list-section">
+        <h3>私のコレクション一覧 (<span id="count">0</span>本)</h3>
+        <ul id="nail-list"></ul>
+    </div>
+
+    <script>
+        // スマホ内に保存されたネイルデータを読み込み
+        let nailDatabase = JSON.parse(localStorage.getItem('myNailColors')) || {};
+        let currentCode = "";
+
+        const scanBtn = document.getElementById('scan-btn');
+        const cameraView = document.getElementById('interactive');
+        const resultContainer = document.getElementById('result-container');
+        const regForm = document.getElementById('registration-form');
+        const nailNameInput = document.getElementById('nail-name');
+        const saveBtn = document.getElementById('save-btn');
+
+        // リストの表示更新
+        function updateList() {
+            const listEl = document.getElementById('nail-list');
+            listEl.innerHTML = "";
+            let count = 0;
+            for (let code in nailDatabase) {
+                count++;
+                const li = document.createElement('li');
+                li.innerHTML = `<span>${nailDatabase[code]} <small style="color:#999;">(${code})</small></span> 
+                                <span class="delete-btn" onclick="deleteNail('${code}')">×</span>`;
+                listEl.appendChild(li);
+            }
+            document.getElementById('count').textContent = count;
+            localStorage.setItem('myNailColors', JSON.stringify(nailDatabase));
+        }
+
+        // 削除機能
+        window.deleteNail = function(code) {
+            if(confirm("リストから削除しますか？")) {
+                delete nailDatabase[code];
+                updateList();
+            }
+        }
+
+        // スキャン開始・停止
+        scanBtn.addEventListener('click', () => {
+            cameraView.style.display = 'block';
+            regForm.style.display = 'none';
+            resultContainer.innerHTML = "<p>スキャン中... バーコードを水平にカメラに近づけてください</p>";
+            
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: cameraView,
+                    constraints: { facingMode: "environment" } // 背面カメラを使用
+                },
+                decoder: {
+                    readers: ["ean_reader", "ean_8_reader"] // 100均のJANコードに対応
+                }
+            }, function(err) {
+                if (err) { alert("カメラの起動に失敗しました"); return; }
+                Quagga.start();
+            });
+        });
+
+        // バーコードが読み取れた時の処理
+        Quagga.onDetected((data) => {
+            currentCode = data.codeResult.code;
+            Quagga.stop();
+            cameraView.style.display = 'none';
+            
+            // データベースに存在するかチェック
+            if (nailDatabase[currentCode]) {
+                resultContainer.innerHTML = `
+                    <p class="status-owned">すでに入手済みです！</p>
+                    <p>👉 登録名: <strong>${nailDatabase[currentCode]}</strong></p>
+                `;
+                regForm.style.display = 'none';
+            } else {
+                resultContainer.innerHTML = `
+                    <p class="status-not-owned">まだ持っていません！</p>
+                    <p>コード: ${currentCode}</p>
+                `;
+                nailNameInput.value = "";
+                regForm.style.display = 'block';
+            }
+        });
+
+        // 新しく保存するボタン
+        saveBtn.addEventListener('click', () => {
+            const name = nailNameInput.value.trim();
+            if (!name) { alert("名前を入力してください"); return; }
+            nailDatabase[currentCode] = name;
+            regForm.style.display = 'none';
+            resultContainer.innerHTML = `<p style="color:#2ed573;">「${name}」を登録しました！</p>`;
+            updateList();
+        });
+
+        // 初回読み込み
+        updateList();
+    </script>
+</body>
+</html>
